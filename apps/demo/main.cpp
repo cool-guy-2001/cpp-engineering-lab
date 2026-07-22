@@ -1,12 +1,13 @@
-#include "cpp_lab/unique_fd.h"
+#include <fcntl.h>
+#include <unistd.h>
 
 #include <cassert>
 #include <cerrno>
-#include <fcntl.h>
 #include <iostream>
 #include <type_traits>
-#include <unistd.h>
 #include <utility>
+
+#include "cpp_lab/core/unique_fd.h"
 
 namespace {
 
@@ -132,6 +133,30 @@ void test_move_assignment() {
     std::cout << "move assignment: passed\n";
 }
 
+void test_reset() {
+    int old_pipes[2]{};
+    int new_pipes[2]{};
+    assert(::pipe(old_pipes) == 0);
+    assert(::pipe(new_pipes) == 0);
+    const int old_fd = old_pipes[0];
+    const int new_fd = new_pipes[0];
+
+    {
+        cpp_lab::UniqueFd owner{old_fd};
+        owner.reset(new_fd);
+        assert(is_fd_closed(old_fd));  //验证原来的文件描述符是否已关闭
+        // new resource acquired
+        assert(owner.valid());
+        assert(is_fd_open(new_fd));
+        assert(owner.get() == new_fd);
+    }
+    assert(is_fd_closed(new_fd));
+    ::close(old_pipes[1]);
+    ::close(new_pipes[1]);
+
+    std::cout << "reset_test: passed\n";
+}
+
 }  // namespace
 
 int main() {
@@ -141,12 +166,14 @@ int main() {
 
     static_assert(std::is_move_constructible_v<cpp_lab::UniqueFd>);
     static_assert(std::is_move_assignable_v<cpp_lab::UniqueFd>);
+    static_assert(std::is_nothrow_destructible_v<cpp_lab::UniqueFd>);
 
     test_default_constructor();
     test_constructor_and_destructor();
     test_release();
     test_move_constructor();
     test_move_assignment();
-
+    test_reset();
     std::cout << "all UniqueFd tests passed\n";
+    return 0;
 }
